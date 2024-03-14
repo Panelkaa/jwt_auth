@@ -10,12 +10,32 @@ class TokenService {
             refreshToken
         }
     }
+
+    validateAccessToken(token){
+        try {
+            const userData = jwt.verify(token, process.env.JWT_ACCESS_SECRET) 
+            return userData;
+        } catch(e) {
+            return null;
+        }
+    } 
+
+    validateRefreshToken(token){
+        try {
+            const userData = jwt.verify(token, process.env.JWT_REFRESH_SECRET) 
+            return userData;
+        } catch(e) {
+            return null;
+        }
+    } 
+
     async saveToken(userId, refreshToken) {
         const tokenData = await db.execute(`SELECT * FROM jwt_auth.token WHERE user = ${userId}`)
             .then((data) => data)
             .catch(error => {
                 console.log(error);
-            })  
+            }) 
+
         if(tokenData) {
             tokenData.refreshToken = refreshToken;
             db.execute(`UPDATE jwt_auth.token
@@ -25,8 +45,8 @@ class TokenService {
             .catch(error => {
                 console.log(error);
             })  
-            // return tokenData.save();
         }
+
         const token = await db.execute(`INSERT INTO jwt_auth.token(user, refreshToken) VALUES (${userId}, "${refreshToken}")`)
             .then((data) => data)
             .catch(error => {
@@ -34,6 +54,22 @@ class TokenService {
             })  
 
         return token;
+    }
+
+    async removeToken(refreshToken) {
+        const tokenData = await db.execute(
+            `DELETE FROM jwt_auth.token WHERE refreshToken = "${refreshToken}"`)
+            .then((data) => data)
+
+        return tokenData;
+    }
+    
+    async findToken(refreshToken) {
+        const tokenData = await db.execute(
+            `SELECT * FROM jwt_auth.token WHERE refreshToken = "${refreshToken}"`)
+            .then((data) => data)
+
+        return tokenData;
     }
 }
 

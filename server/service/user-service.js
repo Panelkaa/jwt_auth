@@ -3,7 +3,8 @@ const bcrypt = require('bcrypt')
 const uuid = require('uuid')
 const mailService = require ('./mail-service');
 const tokenService = require('./token-service');
-
+const ApiError = require('../exceptions/api-error');
+const UserDto = require('../dtos/user-sto');
 class UserService {
     async registration(email, password) {
         const userVerification = await db.execute(`SELECT * FROM jwt_auth.user WHERE email = "${email}"`)
@@ -13,7 +14,7 @@ class UserService {
             })  
         
         if(userVerification) {
-            throw new Error(`Пользователь с почтой ${email} уже существует`)
+            throw ApiError.BadRequest(`Пользователь с почтой ${email} уже существует`)
         }
         const hashPassword = await bcrypt.hash(password, 3); 
         const activationLink = uuid.v4();
@@ -21,10 +22,9 @@ class UserService {
         const user = await db.execute(
             `INSERT INTO jwt_auth.user(email, password, isActivated, activationLink) 
             VALUES ("${email}", "${hashPassword}", "0", "${activationLink}");`)
-            .then((data) => data[0]
-            )
-            .catch(error => {
-                console.log(error.message = 'Такой пользователь уже существует')
+            .then((data) => data[0])
+            .catch(() => {
+                throw ApiError.BadRequest(`Пользователь с почтой ${email} уже существует`)
             })  
         
         await mailService.sendActivationMail(email, `${process.env.API_URL}/api/activate/${activationLink}`);
@@ -44,7 +44,7 @@ class UserService {
                 return item[0].idUser;
             }))
             .catch(() => {
-                throw new Error('Некорректная ссылка активации')
+                throw ApiError.BadRequest('Некорректная ссылка активации')
             }) 
 
             if(user) {
@@ -54,9 +54,65 @@ class UserService {
                 WHERE idUser = ${user[0]}`)
                 .then((data)=> data)
                 .catch(() => {
-                    throw new Error('Некорректная нет')
+                    throw ApiError.BadRequest('Ссылка не активирована')
                 }) 
             }
+    }
+
+    async login(email, password) {
+        const user = await db.execute(`SELECT * FROM jwt_auth.user WHERE email = "${email}"`)
+            .then((data) => data[0])
+
+        if(user.length == []) {
+            throw ApiError.BadRequest(`Пользователь с таким email не найден`)
+        }
+
+        const userDto = new UserDto(...user);
+        const idPassEquals = await bcrypt.compare(password, userDto.password);
+        
+        if(!idPassEquals) {
+            throw ApiError.BadRequest(`Неверный пароль`)
+        }
+        
+        const tokens = tokenService.generateTokens({...user}); 
+        await tokenService.saveToken(userDto.idUser, tokens.refreshToken);
+
+        return { ...tokens, user: user }
+    }
+
+    async logout(refreshToken) {
+        const token = await tokenService.removeToken(refreshToken)
+        return token;
+    }
+
+    async refresh(refreshToken) {
+        if(!refreshToken) {
+            throw ApiError.UnauthorizedError();
+        }
+
+        const userData = tokenService.validateRefreshToken(refreshToken);
+        const tokenFromDb = await tokenService.findToken(refreshToken)
+        if(!userData || !tokenFromDb) {
+            throw ApiError.UnauthorizedError();
+        }  
+
+        const user = await db.execute(`SELECT * FROM jwt_auth.user WHERE email = "${email}"`)
+            .then((data) => data[0])
+
+        const userDto = new UserDto(...user);
+        const tokens = tokenService.generateTokens({...user}); 
+
+        await tokenService.saveToken(userDto.idUser, tokens.refreshToken);
+
+        return { ...tokens, user: user }
+    }
+
+    async getAllUser() {
+        const users = db.execute(
+            `SELECT * FROM jwt_auth.user`)
+            .then((data) => data[0])
+
+        return users;
     }
  }
 
