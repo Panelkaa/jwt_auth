@@ -5,7 +5,14 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
-
+    "useUnknownInCatchVariables": false,
+    "types": [
+      "vite/client",
+    ],
+    "paths": {
+      "react": ["./node_modules/@types/react"]
+    },
+    
     /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
@@ -14,6 +21,7 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
+    
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,
@@ -21,5 +29,6 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "references": [{ "path": "./tsconfig.node.json" }],
+  "exclude": ["**/*.stories.ts"]
 }
